@@ -1,0 +1,21 @@
+import pandas as pd
+import json
+import os
+
+GRADE_PATH = "data/grades.xlsx"
+OUTPUT_PATH = "data/grades_cleaned.json"
+
+df = pd.read_excel(GRADE_PATH)
+
+required_columns = ["Student ID", "Week", "Assignment Score"]
+
+if not all(col in df.columns for col in required_columns):
+    raise ValueError("Missing one or more required columns: Student ID, Week, Assignment Score")
+
+df_cleaned = df[required_columns].copy()
+df_cleaned.columns = ["student_id", "session", "score"]
+
+grades_list = df_cleaned.to_dict(orient="records")
+
+with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
+    json.dump(grades_list, f, ensure_ascii=False, indent=2)
