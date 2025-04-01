@@ -1,0 +1,24 @@
+import json
+from tqdm import tqdm
+
+INPUT_FILE = "data/merged_data/with_focus_clarity.json"
+OUTPUT_FILE = "data/merged_data/with_query_depth.json"
+
+with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+for record in tqdm(data, desc="Computing Final QD Score"):
+    ls = record.get("lexical_structure_score", 0)
+    msd = record.get("multistep_depth_score", 0)
+    fc = record.get("focus_clarity_score", 0)
+
+    qd = (
+        0.35 * ls +
+        0.35 * msd +
+        0.30 * fc
+    )
+
+    record["query_depth_score"] = round(qd, 2)
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
