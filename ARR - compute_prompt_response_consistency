@@ -1,0 +1,43 @@
+import os
+import json
+from tqdm import tqdm
+from sentence_transformers import SentenceTransformer, util
+
+model = SentenceTransformer('all-MiniLM-L6-v2')
+
+INPUT_FILE = "data/merged_data/with_structural_similarity.json"
+OUTPUT_FILE = "data/merged_data/with_prompt_response_consistency.json"
+DELIMITER = "\n---ENTRY---\n"
+
+with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+def compute_prc_score(prompts, responses):
+    if not prompts or not responses:
+        return 0
+
+    if len(prompts) != len(responses):
+        min_len = min(len(prompts), len(responses))
+        prompts = prompts[:min_len]
+        responses = responses[:min_len]
+
+    embeddings1 = model.encode(prompts, convert_to_tensor=True)
+    embeddings2 = model.encode(responses, convert_to_tensor=True)
+
+    cosine_scores = util.cos_sim(embeddings1, embeddings2)
+    similarities = [float(cosine_scores[i][i]) for i in range(len(prompts))]
+
+    return min((sum(similarities) / len(similarities)) * 100, 100)
+
+for record in tqdm(data, desc="Computing PRC Score"):
+    prompt_block = record.get("prompt_block", "")
+    response_block = record.get("response_block", "")
+
+    prompt_list = [p.strip() for p in prompt_block.split(DELIMITER) if p.strip()]
+    response_list = [r.strip() for r in response_block.split(DELIMITER) if r.strip()]
+
+    prc = compute_prc_score(prompt_list, response_list)
+    record["prompt_response_consistency_score"] = round(prc, 2)
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
