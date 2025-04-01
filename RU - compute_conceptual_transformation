@@ -1,0 +1,31 @@
+import json
+from tqdm import tqdm
+from Levenshtein import ratio as lev_ratio
+
+INPUT_FILE = "data/merged_data/with_semantic_novelty.json"
+OUTPUT_FILE = "data/merged_data/with_conceptual_transformation.json"
+
+def jaccard_similarity(text1, text2):
+    set1 = set(text1.lower().split())
+    set2 = set(text2.lower().split())
+    if not set1 or not set2:
+        return 0
+    return len(set1 & set2) / len(set1 | set2)
+
+def compute_ct(response, assignment):
+    jaccard = jaccard_similarity(response, assignment)
+    lev = lev_ratio(response, assignment)
+    avg_sim = (jaccard + lev) / 2
+    ct = (1 - avg_sim) * 100
+    return round(max(0, min(ct, 100)), 2)
+
+with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+for record in tqdm(data, desc="Computing Conceptual Transformation (CT)"):
+    response = record.get("response_block", "")
+    assignment = record.get("assignment_text", "")
+    record["conceptual_transformation_score"] = compute_ct(response, assignment)
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
