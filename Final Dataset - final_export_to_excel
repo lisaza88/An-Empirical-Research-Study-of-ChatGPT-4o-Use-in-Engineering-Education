@@ -1,0 +1,58 @@
+import pandas as pd
+import json
+import os
+from tqdm import tqdm
+
+METRIC_FILE = "data/merged_data/with_problem_solving_score.json"
+ATTENDANCE_FILE = "data/attendance.csv"
+OUTPUT_PATH = "data/final/final_dataset.xlsx"
+
+os.makedirs("data/final/", exist_ok=True)
+
+attendance_df = pd.read_csv(ATTENDANCE_FILE)
+
+with open(METRIC_FILE, "r", encoding="utf-8") as f:
+    metric_data = json.load(f)
+
+metric_lookup = {
+    (m["student_id"], m["session"]): m for m in metric_data
+}
+
+final_rows = []
+
+for _, row in tqdm(attendance_df.iterrows(), total=len(attendance_df), desc="Building final dataset"):
+    sid = row["student_id"]
+    session = int(row["session"])
+    course = row["course"]
+    week = int(row["week"])
+    activity = row["activity_type"]
+    attendance = int(row["attendance"])
+    score = row["assignment_score"]
+
+    ai_access = int((sid, session) in metric_lookup) if attendance == 1 else 0
+    metrics = metric_lookup.get((sid, session), {})
+
+    final_row = {
+        "Student ID": sid,
+        "Course": course,
+        "Week": week,
+        "Attendance": attendance,
+        "AI Access": ai_access,
+        "Activity Type": activity,
+        "AI Query Count": metrics.get("ai_query_count", 0) if attendance == 1 else 0,
+        "AI Response Reliance Score": metrics.get("ai_response_reliance_score", 0) if ai_access else 0,
+        "Assignment Score": score if attendance == 1 else 0,
+        "AI Query Depth & Structure Score": metrics.get("ai_query_depth_score", 0) if ai_access else 0,
+        "AI Query Efficiency Score": metrics.get("query_efficiency_score", 0) if ai_access else 0,
+        "Prompt Refinement Depth Score": metrics.get("prompt_refinement_depth_score", 0) if ai_access else 0,
+        "AI Response Complexity Score": metrics.get("ai_response_complexity_score", 0) if ai_access else 0,
+        "AI Response Utility Score": metrics.get("response_utility_score", 0) if ai_access else 0,
+        "AI-Driven Problem-Solving Score": metrics.get("problem_solving_score", 0) if ai_access else 0,
+        "Structural Complexity Score": metrics.get("structural_complexity_score", 0) if attendance == 1 else 0,
+        "Content Richness Score": metrics.get("content_richness_score", 0) if attendance == 1 else 0
+    }
+
+    final_rows.append(final_row)
+
+final_df = pd.DataFrame(final_rows)
+final_df.to_excel(OUTPUT_PATH, index=False)
