@@ -1,0 +1,28 @@
+import json
+from tqdm import tqdm
+
+INPUT_FILE = "data/merged_data/with_query_submission_link.json"
+OUTPUT_FILE = "data/merged_data/with_response_reliance.json"
+
+with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+for record in tqdm(data, desc="Computing ARR Final Score"):
+    ts = record.get("text_similarity_score", 0)
+    cp = record.get("copy_paste_score", 0)
+    ss = record.get("structural_similarity_score", 0)
+    prc = record.get("prompt_response_consistency_score", 0)
+    qls = record.get("query_submission_link_score", 0)
+
+    arr = (
+        0.40 * ts +
+        0.10 * cp +
+        0.20 * ss +
+        0.20 * prc +
+        0.10 * qls
+    )
+
+    record["ai_response_reliance_score"] = round(arr, 2)
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
