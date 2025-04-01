@@ -1,0 +1,55 @@
+import json
+import os
+import spacy
+import nltk
+from nltk.tokenize import sent_tokenize, word_tokenize
+from tqdm import tqdm
+
+nltk.download("punkt")
+nlp = spacy.load("en_core_web_sm")  # Make sure this is installed
+
+INPUT_FILE = "data/merged_data/unified_data.json"
+OUTPUT_FILE = "data/merged_data/with_structural_complexity.json"
+
+with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+def calculate_sl(text):
+    sentences = sent_tokenize(text)
+    if not sentences:
+        return 0
+    word_counts = [len(word_tokenize(sent)) for sent in sentences]
+    return sum(word_counts) / len(sentences)
+
+def calculate_gc(text):
+    doc = nlp(text)
+    clause_count = 0
+    compound_count = 0
+    nested_count = 0
+    sent_count = len(list(doc.sents)) or 1  # Avoid division by zero
+
+    for token in doc:
+        if token.dep_ in ("advcl", "relcl", "ccomp", "xcomp"):  # subordinate clauses
+            clause_count += 1
+        if token.dep_ == "conj":  # compound structures
+            compound_count += 1
+        if token.head.dep_ in ("advcl", "relcl", "ccomp", "xcomp"):
+            nested_count += 1  # nested structures
+
+    raw_gc = clause_count + compound_count + nested_count
+    gc_score = (raw_gc / sent_count) * 10  # Scaled for normalization
+    return min(gc_score, 100)
+
+for record in tqdm(data, desc="Computing Structural Complexity"):
+    assignment_text = record.get("assignment_text", "")
+    
+    sl_raw = calculate_sl(assignment_text)
+    sl_score = min(sl_raw * 2, 100)  # normalize: assume 50 words/sentence is max
+
+    gc_score = calculate_gc(assignment_text)
+    sc_score = 0.40 * sl_score + 0.60 * gc_score
+
+    record["structural_complexity_score"] = round(sc_score, 2)
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
