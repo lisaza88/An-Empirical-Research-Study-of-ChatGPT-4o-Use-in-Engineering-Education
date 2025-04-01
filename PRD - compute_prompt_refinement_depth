@@ -1,0 +1,51 @@
+import json
+from tqdm import tqdm
+from sentence_transformers import SentenceTransformer, util
+from Levenshtein import ratio as lev_ratio
+import textstat
+
+model = SentenceTransformer('all-MiniLM-L6-v2')
+
+DELIMITER = "\n---ENTRY---\n"
+INPUT_FILE = "data/merged_data/with_query_efficiency.json"
+OUTPUT_FILE = "data/merged_data/with_prompt_refinement.json"
+
+with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+def compute_complexity(text):
+    try:
+        return textstat.flesch_kincaid_grade(text)
+    except:
+        return 0
+
+for record in tqdm(data, desc="Computing PRD Score"):
+    prompt_block = record.get("prompt_block", "")
+    prompts = [p.strip() for p in prompt_block.split(DELIMITER) if p.strip()]
+    
+    if len(prompts) < 2:
+        record["prompt_refinement_depth_score"] = 0
+        continue
+
+    embeddings = model.encode(prompts, convert_to_tensor=True)
+    improvements = []
+
+    for i in range(len(prompts) - 1):
+        sim = util.cos_sim(embeddings[i], embeddings[i + 1]).item()
+        lev = lev_ratio(prompts[i], prompts[i + 1])
+
+        if 0.80 <= sim <= 0.90 and lev < 0.95:
+            initial_score = compute_complexity(prompts[i])
+            final_score = compute_complexity(prompts[i + 1])
+            improvement = final_score - initial_score
+            improvements.append(improvement)
+
+    if not improvements:
+        prd = 0
+    else:
+        prd = sum(improvements) / len(improvements)
+
+    record["prompt_refinement_depth_score"] = round(max(prd, 0), 2)
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
