@@ -1,0 +1,48 @@
+import os
+import re
+import json
+from docx import Document
+from tqdm import tqdm
+
+ASSIGNMENT_DIR = "data/assignments/"
+CONVERTED_DIR = "data/assignments_cleaned/"
+
+os.makedirs(CONVERTED_DIR, exist_ok=True)
+
+def extract_text_from_docx(filepath):
+    try:
+        doc = Document(filepath)
+        full_text = "\n".join([para.text.strip() for para in doc.paragraphs if para.text.strip()])
+        return full_text
+    except Exception as e:
+        print(f"Failed to read {filepath}: {e}")
+        return None
+
+docx_files = [f for f in os.listdir(ASSIGNMENT_DIR) if f.endswith(".docx")]
+
+for filename in tqdm(docx_files, desc="Converting assignments"):
+    try:
+        file_path = os.path.join(ASSIGNMENT_DIR, filename)
+
+        basename = filename.replace(".docx", "")
+        student_id, session_info = basename.split("_")
+        session_number = re.findall(r'\d+', session_info)[0]
+
+        assignment_text = extract_text_from_docx(file_path)
+        if not assignment_text:
+            continue
+
+        output_data = {
+            "student_id": student_id,
+            "session": int(session_number),
+            "assignment_text": assignment_text
+        }
+
+        output_filename = f"{student_id}_session{session_number}.json"
+        output_path = os.path.join(CONVERTED_DIR, output_filename)
+
+        with open(output_path, "w", encoding="utf-8") as out_f:
+            json.dump(output_data, out_f, ensure_ascii=False, indent=2)
+
+    except Exception as e:
+        print(f"Error processing {filename}: {e}")
