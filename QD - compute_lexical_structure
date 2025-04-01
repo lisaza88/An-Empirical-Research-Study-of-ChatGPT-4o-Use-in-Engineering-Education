@@ -1,0 +1,29 @@
+import os
+import json
+from tqdm import tqdm
+import nltk
+from nltk.tokenize import word_tokenize
+import textstat
+
+nltk.download("punkt")
+
+INPUT_FILE = "data/merged_data/with_response_reliance.json"
+OUTPUT_FILE = "data/merged_data/with_lexical_structure.json"
+
+with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+def lexical_diversity(text):
+    tokens = word_tokenize(text.lower())
+    words = [w for w in tokens if w.isalpha()]
+    if not words:
+        return 0
+    unique = set(words)
+    return len(unique) / len(words)
+
+def normalize_complexity(score, inverse=False):
+    if inverse:
+        score = 100 - score
+    return max(0, min(score, 100))
+
+for record in tqdm(data, desc="Comput
