@@ -1,0 +1,43 @@
+import json
+import os
+import nltk
+import spacy
+from nltk.tokenize import word_tokenize
+from tqdm import tqdm
+
+nltk.download("punkt")
+nlp = spacy.load("en_core_web_sm")
+
+INPUT_FILE = "data/merged_data/with_structural_complexity.json"
+OUTPUT_FILE = "data/merged_data/with_content_richness.json"
+
+with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+def calculate_ttr(text):
+    tokens = word_tokenize(text.lower())
+    words = [w for w in tokens if w.isalpha()]
+    if not words:
+        return 0
+    unique_words = set(words)
+    return len(unique_words) / len(words)
+
+def calculate_ld(text):
+    doc = nlp(text)
+    content_words = [token for token in doc if token.pos_ in {"NOUN", "VERB", "ADJ", "ADV"}]
+    all_words = [token for token in doc if token.is_alpha]
+    if not all_words:
+        return 0
+    return len(content_words) / len(all_words)
+
+for record in tqdm(data, desc="Computing Content Richness"):
+    text = record.get("assignment_text", "")
+    
+    ttr = calculate_ttr(text)
+    ld = calculate_ld(text)
+
+    cr_score = 0.50 * ttr * 100 + 0.50 * ld * 100
+    record["content_richness_score"] = round(cr_score, 2)
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
