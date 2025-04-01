@@ -1,0 +1,54 @@
+import os
+import json
+from tqdm import tqdm
+import nltk
+import spacy
+from nltk import ngrams
+from collections import Counter
+
+nltk.download("punkt")
+nlp = spacy.load("en_core_web_sm")
+
+INPUT_FILE = "data/merged_data/with_multistep_depth.json"
+OUTPUT_FILE = "data/merged_data/with_focus_clarity.json"
+DELIMITER = "\n---ENTRY---\n"
+
+def lexical_repetition_score(prompt_list, n=3):
+    all_ngrams = []
+    for prompt in prompt_list:
+        tokens = nltk.word_tokenize(prompt.lower())
+        all_ngrams.extend(list(ngrams(tokens, n)))
+    if not all_ngrams:
+        return 0
+    counts = Counter(all_ngrams)
+    repeated = sum(1 for v in counts.values() if v > 1)
+    return min((repeated / len(counts)) * 100, 100)
+
+def syntactic_compactness_score(prompt_list):
+    total_tokens = 0
+    total_sentences = 0
+    for prompt in prompt_list:
+        doc = nlp(prompt)
+        total_tokens += len([t for t in doc if not t.is_punct])
+        total_sentences += len(list(doc.sents))
+    if total_sentences == 0:
+        return 0
+    avg_len = total_tokens / total_sentences
+    return max(0, 100 - min(avg_len * 2, 100))  # more compact → higher score
+
+def compute_fc_score(prompt_list):
+    rep_score = 100 - lexical_repetition_score(prompt_list)
+    comp_score = syntactic_compactness_score(prompt_list)
+    return (rep_score + comp_score) / 2
+
+with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+for record in tqdm(data, desc="Computing FC Score"):
+    prompt_block = record.get("prompt_block", "")
+    prompts = [p.strip() for p in prompt_block.split(DELIMITER) if p.strip()]
+    fc = compute_fc_score(prompts)
+    record["focus_clarity_score"] = round(fc, 2)
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
