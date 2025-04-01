@@ -1,0 +1,33 @@
+import json
+from tqdm import tqdm
+from sentence_transformers import SentenceTransformer, util
+
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
+INPUT_FILE = "data/merged_data/with_prompt_refinement.json"
+OUTPUT_FILE = "data/merged_data/with_semantic_novelty.json"
+
+with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+def word_count(text):
+    return len(text.split())
+
+def compute_sn(response_text, assignment_text):
+    if word_count(response_text) < 50 or word_count(assignment_text) < 50:
+        return None
+
+    embeddings = model.encode([response_text, assignment_text], convert_to_tensor=True)
+    cosine_sim = util.cos_sim(embeddings[0], embeddings[1]).item()
+    sn = (1 - cosine_sim) * 100
+    return round(max(0, min(sn, 100)), 2)
+
+for record in tqdm(data, desc="Computing Semantic Novelty (SN)"):
+    response = record.get("response_block", "")
+    assignment = record.get("assignment_text", "")
+
+    sn = compute_sn(response, assignment)
+    record["semantic_novelty_score"] = sn if sn is not None else 0
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
