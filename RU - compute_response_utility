@@ -1,0 +1,19 @@
+import json
+from tqdm import tqdm
+
+INPUT_FILE = "data/merged_data/with_contribution_final.json"
+OUTPUT_FILE = "data/merged_data/with_response_utility.json"
+
+with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+for record in tqdm(data, desc="Computing RU Score"):
+    sn = record.get("semantic_novelty_score", 0)
+    ct = record.get("conceptual_transformation_score", 0)
+    cf = record.get("contribution_final_score", 0)
+
+    ru = 0.45 * sn + 0.40 * ct + 0.15 * cf
+    record["response_utility_score"] = round(ru, 2)
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
