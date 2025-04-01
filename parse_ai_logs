@@ -1,0 +1,71 @@
+import os
+import re
+import json
+from Levenshtein import ratio
+from tqdm import tqdm
+
+RAW_LOGS_DIR = "data/logs_raw/"
+CLEANED_LOGS_DIR = "data/logs_cleaned/"
+
+os.makedirs(CLEANED_LOGS_DIR, exist_ok=True)
+
+PROMPT_PREFIX = "Prompt:"
+RESPONSE_PREFIX = "Response:"
+DELIMITER = "\n---ENTRY---\n"
+
+def is_duplicate(prompt, previous_prompts, threshold=0.95):
+    for prev in previous_prompts:
+        if ratio(prompt.strip(), prev.strip()) >= threshold:
+            return True
+    return False
+
+log_files = [f for f in os.listdir(RAW_LOGS_DIR) if f.endswith(".txt")]
+
+for filename in tqdm(log_files, desc="Parsing AI logs"):
+    try:
+        file_path = os.path.join(RAW_LOGS_DIR, filename)
+
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        basename = filename.replace(".txt", "")
+        student_id, session_info, *course_parts = basename.split("_")
+        session_number = re.findall(r'\d+', session_info)[0]
+        course_name = "_".join(course_parts)
+
+        entries = re.split(f"{PROMPT_PREFIX}|{RESPONSE_PREFIX}", content)[1:]
+
+        if len(entries) % 2 != 0:
+            print(f"Warning: Uneven prompt-response pair in file {filename}, skipping last unmatched entry.")
+
+        cleaned_prompts, cleaned_responses, temp_prompts = [], [], []
+
+        for i in range(0, len(entries) - 1, 2):
+            prompt = entries[i].strip()
+            response = entries[i + 1].strip()
+
+            if not is_duplicate(prompt, temp_prompts):
+                cleaned_prompts.append(prompt)
+                cleaned_responses.append(response)
+                temp_prompts.append(prompt)
+
+        prompt_block = DELIMITER.join(cleaned_prompts)
+        response_block = DELIMITER.join(cleaned_responses)
+
+        output_data = {
+            "student_id": student_id,
+            "session": int(session_number),
+            "course": course_name,
+            "prompt_block": prompt_block,
+            "response_block": response_block
+        }
+
+        output_filename = f"{student_id}_session{session_number}_{course_name}.json"
+        output_path = os.path.join(CLEANED_LOGS_DIR, output_filename)
+
+        with open(output_path, "w", encoding="utf-8") as out_f:
+            json.dump(output_data, out_f, ensure_ascii=False, indent=2)
+
+    except Exception as e:
+        print(f"Error processing {filename}: {e}")
+
