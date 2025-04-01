@@ -1,0 +1,19 @@
+import json
+from tqdm import tqdm
+
+INPUT_FILE = "data/merged_data/with_independent_expansion.json"
+OUTPUT_FILE = "data/merged_data/with_problem_solving_score.json"
+
+with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+for record in tqdm(data, desc="Computing Final Problem-Solving Score (PS)"):
+    sa = record.get("stepwise_alignment_score", 0)
+    ca = record.get("conceptual_application_score", 0)
+    ie = record.get("independent_expansion_score", 0)
+
+    ps = 0.40 * sa + 0.40 * ca + 0.20 * ie
+    record["problem_solving_score"] = round(ps, 2)
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
