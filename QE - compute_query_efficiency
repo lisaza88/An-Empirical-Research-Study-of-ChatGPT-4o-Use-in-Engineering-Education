@@ -1,0 +1,27 @@
+import json
+from tqdm import tqdm
+
+DELIMITER = "\n---ENTRY---\n"
+
+INPUT_FILE = "data/merged_data/with_query_depth.json"
+OUTPUT_FILE = "data/merged_data/with_query_efficiency.json"
+
+with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+for record in tqdm(data, desc="Computing QE Score"):
+    qd = record.get("query_depth_score", 0)
+    prompt_block = record.get("prompt_block", "")
+    
+    prompts = [p.strip() for p in prompt_block.split(DELIMITER) if p.strip()]
+    nq = len(prompts)
+
+    if nq == 0:
+        qe = 0
+    else:
+        qe = qd / nq
+
+    record["query_efficiency_score"] = round(min(qe, 100), 2)
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
