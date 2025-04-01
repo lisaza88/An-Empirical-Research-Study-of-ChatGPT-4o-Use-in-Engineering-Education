@@ -1,0 +1,55 @@
+import os
+import json
+from tqdm import tqdm
+import spacy
+
+nlp = spacy.load("en_core_web_sm")
+
+INPUT_FILE = "data/merged_data/with_lexical_structure.json"
+OUTPUT_FILE = "data/merged_data/with_multistep_depth.json"
+DELIMITER = "\n---ENTRY---\n"
+
+# Sample sets of procedural verbs and logical operators
+procedural_verbs = {
+    "calculate", "analyze", "compare", "determine", "evaluate",
+    "solve", "design", "develop", "assess", "construct", "simulate"
+}
+
+logic_words = {
+    "if", "then", "else", "and", "or", "not", "while", "for", "when", "unless"
+}
+
+clause_tags = {"advcl", "ccomp", "xcomp", "mark"}
+
+def compute_msd_score(prompt_list):
+    score = 0
+    total = 0
+
+    for prompt in prompt_list:
+        doc = nlp(prompt)
+        verbs = [token.lemma_.lower() for token in doc if token.pos_ == "VERB"]
+        tokens = [token.text.lower() for token in doc]
+
+        verb_matches = sum(1 for v in verbs if v in procedural_verbs)
+        logic_matches = sum(1 for t in tokens if t in logic_words)
+        clause_matches = sum(1 for t in doc if t.dep_ in clause_tags)
+
+        score += verb_matches + logic_matches + clause_matches
+        total += 1
+
+    if total == 0:
+        return 0
+
+    return min((score / total) * 10, 100)
+
+with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+for record in tqdm(data, desc="Computing MSD Score"):
+    prompt_block = record.get("prompt_block", "")
+    prompts = [p.strip() for p in prompt_block.split(DELIMITER) if p.strip()]
+    msd = compute_msd_score(prompts)
+    record["multistep_depth_score"] = round(msd, 2)
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
