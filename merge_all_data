@@ -1,0 +1,61 @@
+import os
+import json
+from tqdm import tqdm
+
+LOG_DIR = "data/logs_cleaned/"
+ASSIGNMENT_DIR = "data/assignments_cleaned/"
+GRADE_FILE = "data/grades_cleaned.json"
+OUTPUT_FILE = "data/merged_data/unified_data.json"
+
+os.makedirs("data/merged_data/", exist_ok=True)
+
+# Load grades
+with open(GRADE_FILE, "r", encoding="utf-8") as f:
+    grades = json.load(f)
+
+grade_lookup = {(g["student_id"], int(g["session"])): g["score"] for g in grades}
+
+merged_records = []
+
+log_files = [f for f in os.listdir(LOG_DIR) if f.endswith(".json")]
+
+for log_file in tqdm(log_files, desc="Merging logs with assignments and grades"):
+    try:
+        log_path = os.path.join(LOG_DIR, log_file)
+        with open(log_path, "r", encoding="utf-8") as f:
+            log_data = json.load(f)
+
+        student_id = log_data["student_id"]
+        session = int(log_data["session"])
+
+        # Match assignment
+        assignment_filename = f"{student_id}_session{session}.json"
+        assignment_path = os.path.join(ASSIGNMENT_DIR, assignment_filename)
+
+        if not os.path.exists(assignment_path):
+            print(f"Assignment not found for {student_id}, session {session}")
+            continue
+
+        with open(assignment_path, "r", encoding="utf-8") as f:
+            assignment_data = json.load(f)
+
+        assignment_text = assignment_data["assignment_text"]
+        score = grade_lookup.get((student_id, session), None)
+
+        record = {
+            "student_id": student_id,
+            "session": session,
+            "course": log_data["course"],
+            "prompt_block": log_data["prompt_block"],
+            "response_block": log_data["response_block"],
+            "assignment_text": assignment_text,
+            "score": score
+        }
+
+        merged_records.append(record)
+
+    except Exception as e:
+        print(f"Error merging file {log_file}: {e}")
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(merged_records, f, ensure_ascii=False, indent=2)
