@@ -1,0 +1,38 @@
+import json
+from tqdm import tqdm
+import spacy
+from sentence_transformers import SentenceTransformer, util
+
+nlp = spacy.load("en_core_web_sm")
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
+INPUT_FILE = "data/merged_data/with_stepwise_alignment.json"
+OUTPUT_FILE = "data/merged_data/with_conceptual_application.json"
+
+def extract_entities(text):
+    doc = nlp(text)
+    return set(ent.text.lower() for ent in doc.ents)
+
+def compute_ca(response, assignment):
+    entities = extract_entities(response)
+    assignment_lower = assignment.lower()
+
+    match_count = sum(1 for ent in entities if ent in assignment_lower)
+    entity_score = match_count / len(entities) if entities else 0
+
+    embeddings = model.encode([response, assignment], convert_to_tensor=True)
+    cos_sim = util.cos_sim(embeddings[0], embeddings[1]).item()
+
+    ca = ((entity_score + cos_sim) / 2) * 100
+    return round(min(ca, 100), 2)
+
+with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+for record in tqdm(data, desc="Computing Conceptual Application (CA)"):
+    response = record.get("response_block", "")
+    assignment = record.get("assignment_text", "")
+    record["conceptual_application_score"] = compute_ca(response, assignment)
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
