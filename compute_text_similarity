@@ -1,0 +1,34 @@
+import os
+import json
+import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from Levenshtein import ratio as lev_ratio
+from tqdm import tqdm
+
+INPUT_FILE = "data/merged_data/with_content_richness.json"
+OUTPUT_FILE = "data/merged_data/with_text_similarity.json"
+
+with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+def compute_ts_score(ai_response, student_text):
+    vectorizer = TfidfVectorizer().fit([ai_response, student_text])
+    tfidf = vectorizer.transform([ai_response, student_text])
+    cosine_sim = (tfidf[0] @ tfidf[1].T).A[0][0]
+
+    a_tokens = set(ai_response.lower().split())
+    s_tokens = set(student_text.lower().split())
+    jaccard = len(a_tokens & s_tokens) / len(a_tokens | s_tokens) if (a_tokens | s_tokens) else 0
+
+    lev = lev_ratio(ai_response, student_text)
+    return min(np.mean([cosine_sim, jaccard, lev]) * 100, 100)
+
+for record in tqdm(data, desc="Computing TS Score"):
+    response = record.get("response_block", "")
+    student_text = record.get("assignment_text", "")
+
+    ts = compute_ts_score(response, student_text)
+    record["text_similarity_score"] = round(ts, 2)
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
