@@ -1,0 +1,43 @@
+import json
+from tqdm import tqdm
+import spacy
+from sentence_transformers import SentenceTransformer, util
+
+nlp = spacy.load("en_core_web_sm")
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
+INPUT_FILE = "data/merged_data/with_conceptual_application.json"
+OUTPUT_FILE = "data/merged_data/with_independent_expansion.json"
+
+clause_tags = {"advcl", "ccomp", "xcomp", "acl", "relcl", "mark", "conj"}
+
+def compute_syntactic_complexity(text):
+    doc = nlp(text)
+    clause_count = sum(1 for token in doc if token.dep_ in clause_tags)
+    before_main_verb = 0
+    for sent in doc.sents:
+        for i, token in enumerate(sent):
+            if token.dep_ == "ROOT" and token.pos_ == "VERB":
+                before_main_verb += i
+                break
+    return clause_count + before_main_verb
+
+def compute_ie(response, assignment):
+    embeddings = model.encode([response, assignment], convert_to_tensor=True)
+    semantic_distance = 1 - util.cos_sim(embeddings[0], embeddings[1]).item()
+    syntactic_score = compute_syntactic_complexity(assignment)
+
+    syntactic_scaled = min(syntactic_score * 5, 100)
+    ie = ((semantic_distance * 100) + syntactic_scaled) / 2
+    return round(min(ie, 100), 2)
+
+with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+for record in tqdm(data, desc="Computing Independent Expansion (IE)"):
+    response = record.get("response_block", "")
+    assignment = record.get("assignment_text", "")
+    record["independent_expansion_score"] = compute_ie(response, assignment)
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
