@@ -1,0 +1,39 @@
+import json
+from tqdm import tqdm
+from sentence_transformers import SentenceTransformer, util
+import nltk
+
+nltk.download("punkt")
+from nltk.tokenize import sent_tokenize
+
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
+INPUT_FILE = "data/merged_data/with_response_utility.json"
+OUTPUT_FILE = "data/merged_data/with_stepwise_alignment.json"
+
+def compute_sa(response_text, assignment_text):
+    response_sents = sent_tokenize(response_text)
+    assignment_sents = sent_tokenize(assignment_text)
+
+    if not response_sents or not assignment_sents:
+        return 0
+
+    min_len = min(len(response_sents), len(assignment_sents))
+    response_embeds = model.encode(response_sents[:min_len], convert_to_tensor=True)
+    assignment_embeds = model.encode(assignment_sents[:min_len], convert_to_tensor=True)
+
+    cosine_scores = util.cos_sim(response_embeds, assignment_embeds)
+    similarities = [float(cosine_scores[i][i]) for i in range(min_len)]
+    avg = sum(similarities) / len(similarities)
+    return round(avg * 100, 2)
+
+with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+for record in tqdm(data, desc="Computing Stepwise Alignment (SA)"):
+    response = record.get("response_block", "")
+    assignment = record.get("assignment_text", "")
+    record["stepwise_alignment_score"] = compute_sa(response, assignment)
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
