@@ -1,0 +1,43 @@
+import os
+import json
+from tqdm import tqdm
+from nltk.tokenize import sent_tokenize
+from Levenshtein import ratio as lev_ratio
+import nltk
+
+nltk.download("punkt")
+
+INPUT_FILE = "data/merged_data/with_text_similarity.json"
+OUTPUT_FILE = "data/merged_data/with_copy_paste_score.json"
+
+with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+def compute_cp_score(response_text, student_text):
+    response_sents = sent_tokenize(response_text)
+    student_sents = sent_tokenize(student_text)
+
+    if not response_sents or not student_sents:
+        return 0
+
+    match_count = 0
+    for resp in response_sents:
+        for stu in student_sents:
+            if resp.strip() == stu.strip():
+                match_count += 1
+                break
+            elif lev_ratio(resp.strip(), stu.strip()) >= 0.90:
+                match_count += 1
+                break
+
+    return min((match_count / len(response_sents)) * 100, 100)
+
+for record in tqdm(data, desc="Computing CP Score"):
+    response = record.get("response_block", "")
+    student_text = record.get("assignment_text", "")
+
+    cp = compute_cp_score(response, student_text)
+    record["copy_paste_score"] = round(cp, 2)
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
