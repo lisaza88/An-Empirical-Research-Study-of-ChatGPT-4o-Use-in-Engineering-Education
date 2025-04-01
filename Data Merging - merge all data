@@ -9,7 +9,6 @@ OUTPUT_FILE = "data/merged_data/unified_data.json"
 
 os.makedirs("data/merged_data/", exist_ok=True)
 
-# Load grades
 with open(GRADE_FILE, "r", encoding="utf-8") as f:
     grades = json.load(f)
 
@@ -28,7 +27,6 @@ for log_file in tqdm(log_files, desc="Merging logs with assignments and grades")
         student_id = log_data["student_id"]
         session = int(log_data["session"])
 
-        # Match assignment
         assignment_filename = f"{student_id}_session{session}.json"
         assignment_path = os.path.join(ASSIGNMENT_DIR, assignment_filename)
 
@@ -59,3 +57,4 @@ for log_file in tqdm(log_files, desc="Merging logs with assignments and grades")
 
 with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
     json.dump(merged_records, f, ensure_ascii=False, indent=2)
+
