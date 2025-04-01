@@ -1,0 +1,40 @@
+import json
+from tqdm import tqdm
+import spacy
+from sentence_transformers import SentenceTransformer, util
+
+nlp = spacy.load("en_core_web_sm")
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
+INPUT_FILE = "data/merged_data/with_conceptual_transformation.json"
+OUTPUT_FILE = "data/merged_data/with_contribution_final.json"
+
+def extract_entities(text):
+    doc = nlp(text)
+    return set(ent.text.lower() for ent in doc.ents)
+
+def compute_cf(response, assignment):
+    embeddings = model.encode([response, assignment], convert_to_tensor=True)
+    cos_sim = util.cos_sim(embeddings[0], embeddings[1]).item()
+
+    ents_response = extract_entities(response)
+    ents_assignment = extract_entities(assignment)
+
+    if not ents_response:
+        overlap = 0
+    else:
+        overlap = len(ents_response & ents_assignment) / len(ents_response)
+
+    cf = ((cos_sim + overlap) / 2) * 100
+    return round(min(cf, 100), 2)
+
+with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+for record in tqdm(data, desc="Computing Contribution to Final (CF)"):
+    response = record.get("response_block", "")
+    assignment = record.get("assignment_text", "")
+    record["contribution_final_score"] = compute_cf(response, assignment)
+
+with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+    json.dump(data, f, ensure_ascii=False, indent=2)
